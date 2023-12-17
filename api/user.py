@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import jwt
 from datetime import datetime, timedelta
@@ -14,6 +15,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 SECRET_KEY = "5e70bbb815042f7327bd27794af546b0"
 ALGORITHM = "HS256"
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
 
 
 def create_access_token(user_data: dict, expires_delta: timedelta = None):
@@ -35,11 +46,32 @@ def get_db():
         db.close()
 
 
+def get_current_user(token: str = Header(...), db: Session = Depends(get_db)):
+    print(f"Received token: {token}")  # 디버깅을 위해 추가
+
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
 @router.post("/signup")
-def create_user(username: str, password: str, db: Session = Depends(get_db)):
+def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
     # 사용자 생성 로직
-    db_user = User(username=username)
-    db_user.set_password(password)  # 비밀번호 해시화
+    db_user = User(username=user_data.username)
+    db_user.set_password(user_data.password)  # 비밀번호 해시화
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -47,13 +79,12 @@ def create_user(username: str, password: str, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(username: str, password: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == user_data.username).first()
 
-    if user and user.verify_password(password):
-        # Generate JWT token
+    if user and user.verify_password(user_data.password):
         access_token_expires = timedelta(minutes=15)
-        access_token = create_access_token(data={"sub": user.username}, expires_delta=access_token_expires)
+        access_token = create_access_token({"sub": user.username}, expires_delta=access_token_expires)
         return {"access_token": access_token, "token_type": "bearer"}
     else:
         raise HTTPException(

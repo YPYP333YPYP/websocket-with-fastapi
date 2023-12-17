@@ -1,13 +1,14 @@
-from fastapi import APIRouter, HTTPException, WebSocket, Depends, status, Query
+from fastapi import APIRouter, HTTPException, WebSocket, Depends, status, Query, Header
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
+from api.user import get_current_user
 from db.databast  import SessionLocal
 from models import ChatRoom, Membership, User, Message
 
 router = APIRouter()
-
 
 def get_db():
     db = SessionLocal()
@@ -24,7 +25,7 @@ class ChatRoomResponse(BaseModel):
 
 
 @router.post("/create_room")
-def create_room(room_name: str, db: Session = Depends(get_db)):
+def create_room(room_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # 채팅방 생성 로직
     chat_room = ChatRoom(room_name=room_name)
     db.add(chat_room)
@@ -34,7 +35,7 @@ def create_room(room_name: str, db: Session = Depends(get_db)):
 
 
 @router.post("/join_room")
-def join_room(user_id: int, room_id: int, db: Session = Depends(get_db)):
+def join_room(user_id: int, room_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # 채팅방 참여 로직
     user = db.query(User).filter(User.id == user_id).first()
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -64,14 +65,18 @@ def join_room(user_id: int, room_id: int, db: Session = Depends(get_db)):
 @router.get("/chat_rooms", response_model=list[ChatRoomResponse])
 def get_chat_rooms(skip: int = Query(0, description="Skip the first N items", ge=0),
                     limit: int = Query(10, description="Limit the number of items returned", le=100),
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     chat_rooms = db.query(ChatRoom).offset(skip).limit(limit).all()
     response_data = [{"id": room.id, "room_name": room.room_name, "created_at": room.created_at.isoformat()} for room in chat_rooms]
     return response_data
 
 
 @router.get("/room/{room_id}/members")
-def get_room_members(room_id: int, db: Session = Depends(get_db)):
+def get_room_members(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     # 채팅방 멤버 리스트 가져오기
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
     if chat_room:
@@ -112,7 +117,8 @@ async def chat_ws(
         websocket: WebSocket,
         room_id: int,
         user_id: int,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     # WebSocket 연결 허용 여부 확인
     if not await validate_websocket_connection(websocket, room_id, user_id, db):
@@ -154,7 +160,8 @@ async def chat_ws(
     websocket: WebSocket,
     room_id: int,
     user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     # WebSocket 연결 종료 처리
     user = db.query(User).filter(User.id == user_id).first()

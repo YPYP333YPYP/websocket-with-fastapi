@@ -5,6 +5,8 @@ from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconn
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
+from fastapi.openapi.models import OAuthFlowAuthorizationCode
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -21,7 +23,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8001, log_level="debug")
+    uvicorn.run(app, host="127.0.0.1", port=8001)
