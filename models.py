@@ -77,7 +77,10 @@ class User(Base):
         upload_folder.mkdir(parents=True, exist_ok=True)
         filename = profile_picture.filename
         filepath = upload_folder / filename
-        profile_picture.save(filepath)
+
+        with open(filepath, "wb") as file:
+            file.write(profile_picture.file.read())
+
         return str(filepath)
 
     # # AWS S3 저장 시

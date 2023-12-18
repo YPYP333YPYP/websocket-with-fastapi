@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Query, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -24,12 +24,6 @@ class UserCreate(BaseModel):
     username: str
     password: str
     phone_number: str
-
-
-class UserUpdate(BaseModel):
-    email: str
-    profile_picture: str
-    status_message: str
 
 
 def create_access_token(user_data: dict, expires_delta: timedelta = None):
@@ -136,15 +130,18 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 # 유저 프로필 추가 정보 수정
 @router.put("/update_profile/{user_id}")
-def update_user_profile(user_id: int, user_data: UserUpdate, db: Session = Depends(get_db)):
+def update_user_profile(user_id: int,
+                        status_message: str,
+                        email: str,
+                        profile_picture: UploadFile = File(None),
+                        db: Session = Depends(get_db)
+):
     user = db.query(User).filter(User.id == user_id).first()
 
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.email = user_data.email
-    user.profile_picture = user_data.profile_picture
-    user.status_message = user_data.status_message
+    user.update_profile(profile_picture, status_message, email)
     db.commit()
     db.refresh(user)
 
@@ -160,7 +157,7 @@ def deactivate_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_active = False
-    user.inactive_date = datetime.utcnow()
+    user.inactive_date = datetime.now()
     db.commit()
     db.refresh(user)
 
