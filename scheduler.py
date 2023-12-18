@@ -4,7 +4,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
-from db.databast import SessionLocal
+from db.database import SessionLocal
 from models import User
 
 logging.basicConfig()

@@ -4,7 +4,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from models import Base
-from db.databast import engine
+from db.database import engine
 
 
 # this is the Alembic Config object, which provides

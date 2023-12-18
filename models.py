@@ -5,6 +5,8 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from sqlalchemy import TEXT
+import random
+import string
 
 Base = declarative_base()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -88,15 +90,41 @@ class User(Base):
     #     return None
 
 
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_name = Column(String(50), index=True)
+    chat_rooms = relationship("ChatRoom", back_populates="category")
+
+
 class ChatRoom(Base):
     __tablename__ = "chat_rooms"
 
     id = Column(Integer, primary_key=True, index=True)
     room_name = Column(String(255), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
+    is_private = Column(Boolean, default=False)
+    hashtags = relationship("Hashtag", back_populates="room", cascade="all, delete-orphan")
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="chat_rooms")
     memberships = relationship("Membership", back_populates="room")
     messages = relationship("Message", back_populates="room")
+    auth_code = Column(String(20), unique=True)
+
+    def generate_auth_code(self):
+        characters = string.ascii_uppercase + string.digits
+        auth_code = ''.join(random.choice(characters) for _ in range(4))
+        self.auth_code = auth_code
+
+
+class Hashtag(Base):
+    __tablename__ = "hashtags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tag_name = Column(String(50), index=True)
+    room_id = Column(Integer, ForeignKey("chat_rooms.id"))
+    room = relationship("ChatRoom", back_populates="hashtags")
 
 
 class Message(Base):

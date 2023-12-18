@@ -5,14 +5,12 @@ from sqlalchemy.orm import Session
 import jwt
 from datetime import datetime, timedelta
 from models import User
-from db.databast import SessionLocal
+from db.database import SessionLocal
+from config import SECRET_KEY, ALGORITHM
 
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-SECRET_KEY = "5e70bbb815042f7327bd27794af546b0"
-ALGORITHM = "HS256"
 
 
 class UserLogin(BaseModel):
