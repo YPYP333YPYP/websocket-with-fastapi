@@ -4,11 +4,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from api.user import get_current_user
+from api.user import get_current_user, get_current_user_from_parameter
 from db.databast  import SessionLocal
 from models import ChatRoom, Membership, User, Message
 
 router = APIRouter()
+
 
 def get_db():
     db = SessionLocal()
@@ -118,7 +119,7 @@ async def chat_ws(
         room_id: int,
         user_id: int,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user_from_parameter)
 ):
     # WebSocket 연결 허용 여부 확인
     if not await validate_websocket_connection(websocket, room_id, user_id, db):
@@ -161,7 +162,7 @@ async def chat_ws(
     room_id: int,
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_from_parameter)
 ):
     # WebSocket 연결 종료 처리
     user = db.query(User).filter(User.id == user_id).first()
