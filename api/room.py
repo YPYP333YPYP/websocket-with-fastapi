@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from api.user import get_current_user, get_current_user_from_parameter
 from db.database import SessionLocal
-from models import ChatRoom, Membership, User, Message, Hashtag, Category
+from models import ChatRoom, Membership, User, Hashtag, Category
 
 router = APIRouter()
 
@@ -22,6 +22,7 @@ class ChatRoomCreate(BaseModel):
     room_name: str
     is_private: bool
     category: int
+    user_id: int
 
 
 class HashtagSchema(BaseModel):
@@ -42,9 +43,9 @@ class ChatRoomResponse(BaseModel):
 @router.post("/create")
 def create_room(chatroom: ChatRoomCreate,
                 db: Session = Depends(get_db),
-                current_user: User = Depends(get_current_user)):
+               ):
     # 채팅방 생성 로직
-    chat_room = ChatRoom(room_name=chatroom.room_name, is_private=chatroom.is_private, category_id=chatroom.category)
+    chat_room = ChatRoom(room_name=chatroom.room_name, is_private=chatroom.is_private, category_id=chatroom.category, manager_id=chatroom.user_id)
     chat_room.generate_auth_code()
     db.add(chat_room)
     db.commit()
@@ -54,29 +55,71 @@ def create_room(chatroom: ChatRoomCreate,
 
 # 채팅방 참여
 @router.post("/join")
-def join_room(user_id: int, room_id: int, db: Session = Depends(get_db),
-              current_user: User = Depends(get_current_user)):
+def join_room(user_id: int,
+              room_id: int,
+              auth_code: str = None,
+              db: Session = Depends(get_db),
+              current_user: User = Depends(get_current_user)
+              ):
     user = db.query(User).filter(User.id == user_id).first()
-    chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
+    if current_user.id == user.id:
+        chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
 
-    if user and chat_room:
-        membership = db.query(Membership).filter(
-            Membership.user_id == user_id, Membership.room_id == room_id
-        ).first()
+        if user and chat_room:
+            membership = db.query(Membership).filter(
+                Membership.user_id == user_id, Membership.room_id == room_id
+            ).first()
 
-        if membership:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is already a member of this room",
-            )
+            if membership:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User is already a member of this room",
+                )
 
-        new_membership = Membership(user=user, room=chat_room)
-        db.add(new_membership)
-        db.commit()
+            # 사설 채팅방 일 경우 초대코드
+            if chat_room.is_private:
+                if auth_code == chat_room.auth_code:
+                    new_membership = Membership(user=user, room=chat_room)
+                    db.add(new_membership)
+                else:
+                    raise HTTPException(status_code=401, detail="Not match Code")
+            else:
+                new_membership = Membership(user=user, room=chat_room)
+                db.add(new_membership)
 
-        return {"message": f"User {user.username} joined room {chat_room.room_name}"}
+            db.commit()
+
+            return {"message": f"User {user.username} joined room {chat_room.room_name}"}
+        else:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or room not found")
     else:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or room not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not match user ")
+
+
+# 채팅방 이름, 사설 채팅방 수정
+@router.put("/update/{room_id}")
+async def update_chat_room(room_id: int, room_update: dict, db: Session = Depends(get_db)):
+
+    try:
+        chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
+
+        if not chat_room:
+            raise HTTPException(status_code=404, detail="Chat room not found")
+
+        if 'room_name' in room_update:
+            chat_room.room_name = room_update['room_name']
+
+        if 'is_private' in room_update:
+            chat_room.is_private = room_update['is_private']
+
+        db.commit()
+        return {"message": "Chat room updated successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        db.close()
 
 
 # 모든 채팅방 조회
@@ -84,7 +127,7 @@ def join_room(user_id: int, room_id: int, db: Session = Depends(get_db),
 def get_chat_rooms(skip: int = Query(0, description="Skip the first N items", ge=0),
                    limit: int = Query(10, description="Limit the number of items returned", le=100),
                    db: Session = Depends(get_db),
-                   current_user: User = Depends(get_current_user)):
+                   ):
     chat_rooms = (
         db.query(ChatRoom)
             .options(joinedload(ChatRoom.hashtags), joinedload(ChatRoom.category))
@@ -106,6 +149,26 @@ def get_chat_rooms(skip: int = Query(0, description="Skip the first N items", ge
     ]
 
     return response_data
+
+
+@router.get("/{room_id}/{manager_id}/expel/{user_id}")
+def expel_user_by_manager(room_id: int, manager_id: int, user_id: int, db: Session = Depends(get_db)):
+    db_chatroom = db.query(ChatRoom).filter(room_id == ChatRoom.id).first()
+    user_name = db.query(User).filter(user_id == User.id).first().username
+    if not db_chatroom:
+        raise HTTPException(status_code=404, detail="Chat room not found")
+
+    if not user_name:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if db_chatroom.manager_id == manager_id:
+        membership = db.query(Membership).filter(Membership.room_id == room_id, Membership.user_id == user_id).first()
+        db.delete(membership)
+        db.commit()
+    else:
+        raise HTTPException(status_code=204, detail="User is not manager")
+
+    return f'{user_name} has been banned '
 
 
 # 채팅방 멤버 조회

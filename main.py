@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 # logging 옵션
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI()
 
@@ -31,4 +31,4 @@ app.add_middleware(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    uvicorn.run(app, host="127.0.0.1", port=8001, log_level="debug")

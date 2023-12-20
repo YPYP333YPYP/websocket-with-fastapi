@@ -106,11 +106,12 @@ class ChatRoom(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_private = Column(Boolean, default=False)
     hashtags = relationship("Hashtag", back_populates="room", cascade="all, delete-orphan")
-    category_id = Column(Integer, ForeignKey("categories.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"),)
     category = relationship("Category", back_populates="chat_rooms")
     memberships = relationship("Membership", back_populates="room")
     messages = relationship("Message", back_populates="room")
     auth_code = Column(String(20), unique=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     def generate_auth_code(self):
         characters = string.ascii_uppercase + string.digits
