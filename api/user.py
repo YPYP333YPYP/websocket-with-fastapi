@@ -107,7 +107,7 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
     if user and user.verify_password(user_data.password):
         access_token_expires = timedelta(minutes=15)
         access_token = create_access_token({"sub": user.username}, expires_delta=access_token_expires)
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {"user_id": user.id, "access_token": access_token, "token_type": "bearer"}
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

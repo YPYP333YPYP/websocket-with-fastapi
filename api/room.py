@@ -59,41 +59,41 @@ def join_room(user_id: int,
               room_id: int,
               auth_code: str = None,
               db: Session = Depends(get_db),
-              current_user: User = Depends(get_current_user)
+              # current_user: User = Depends(get_current_user)
               ):
     user = db.query(User).filter(User.id == user_id).first()
-    if current_user.id == user.id:
-        chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
+    # if current_user.id == user.id:
+    chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
 
-        if user and chat_room:
-            membership = db.query(Membership).filter(
-                Membership.user_id == user_id, Membership.room_id == room_id
-            ).first()
+    if user and chat_room:
+        membership = db.query(Membership).filter(
+            Membership.user_id == user_id, Membership.room_id == room_id
+        ).first()
 
-            if membership:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="User is already a member of this room",
-                )
+        if membership:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User is already a member of this room",
+            )
 
-            # 사설 채팅방 일 경우 초대코드
-            if chat_room.is_private:
-                if auth_code == chat_room.auth_code:
-                    new_membership = Membership(user=user, room=chat_room)
-                    db.add(new_membership)
-                else:
-                    raise HTTPException(status_code=401, detail="Not match Code")
-            else:
+        # 사설 채팅방 일 경우 초대코드
+        if chat_room.is_private:
+            if auth_code == chat_room.auth_code:
                 new_membership = Membership(user=user, room=chat_room)
                 db.add(new_membership)
-
-            db.commit()
-
-            return {"message": f"User {user.username} joined room {chat_room.room_name}"}
+            else:
+                raise HTTPException(status_code=401, detail="Not match Code")
         else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or room not found")
+            new_membership = Membership(user=user, room=chat_room)
+            db.add(new_membership)
+
+        db.commit()
+
+        return {"message": f"User {user.username} joined room {chat_room.room_name}"}
     else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not match user ")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or room not found")
+    # else:
+    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not match user ")
 
 
 # 채팅방 이름, 사설 채팅방 수정
