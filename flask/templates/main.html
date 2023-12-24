@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Div Page</title>
+
+    <style>
+        body {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            height: 100vh;
+            margin: 0;
+        }
+
+        .quadrant {
+            border: 1px solid #ccc;
+            padding: 20px;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 첫 번째 사분면: 회원가입 -->
+    <div class="quadrant" id="signup-quadrant">
+        <h1>회원가입</h1>
+        <label for="new-user-name">유저 이름:</label>
+        <input type="text" id="new-user-name" placeholder="Username">
+        <label for="new-password">비밀번호:</label>
+        <input type="password" id="new-password" placeholder="Password">
+        <label for="new-phone-number">휴대전화 번호:</label>
+        <input type="text" id="new-phone-number" placeholder="010-0000-0000">
+        <button onclick="registerUser()">등록</button>
+    </div>
+
+    <!-- 두 번째 사분면: 로그인 -->
+    <div class="quadrant" id="login-quadrant">
+        <h1>로그인</h1>
+        <label for="existing-user-name">유저 NAME:</label>
+        <input type="text" id="existing-user-name" placeholder="User ID">
+        <label for="existing-user-password">유저 PASSWORD:</label>
+        <input type="password" id="existing-user-password" placeholder="User PASSWORD">
+        <button onclick="loginUser()">로그인</button>
+        <div id="logged-in-user" style="margin-top: 20px;"></div>
+    </div>
+
+    <!-- 세 번째 사분면: 채팅방 리스트 -->
+    <div class="quadrant" id="chat-list-quadrant">
+        <h1>채팅방 리스트</h1>
+        <ul id="chat-room-list"></ul>
+        <button onclick="createChatRoom()">채팅방 생성</button>
+    </div>
+
+    <!-- 네 번째 사분면: 실시간 채팅 -->
+    <div class="quadrant" id="chat-room-quadrant">
+        <h1>실시간 채팅</h1>
+        <div id="chat-messages" style="height: 300px; overflow-y: scroll; padding: 10px; background-color: #f9f9f9;">
+        </div>
+        <input type="text" id="message-input" placeholder="메시지 입력...">
+        <button onclick="sendMessage()">전송</button>
+    </div>
+
+    <div id="logged-in-section" style="display: none;">
+        <div id="user-info"></div>
+        <button onclick="logoutUser()">로그아웃</button>
+    </div>
+
+    <script>
+
+        function registerUser() {
+            const newUserNameInput = document.getElementById("new-user-name");
+            const newUserName = newUserNameInput.value;
+            console.log(newUserName);
+            const newUserPasswordInput = document.getElementById("new-password");
+            const newUserPassword = newUserPasswordInput.value;
+            const newUserPhoneNumberInput = document.getElementById("new-phone-number");
+            const newUserPhoneNumber = newUserPhoneNumberInput.value;
+
+            // 사용자 등록 요청을 FastAPI 서버에 보냄
+            // (서버 측에서 이 엔드포인트를 구현해야 함)
+            fetch('http://localhost:8001/user/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username: newUserName, password: newUserPassword, phone_number: newUserPhoneNumber }),
+            })
+                .then(response => response.json())
+                .catch((error) => {
+                    console.error('에러:', error);
+                });
+        }
+
+        function loginUser() {
+            const existingUserNameInput = document.getElementById("existing-user-name");
+            const existingUserName = existingUserNameInput.value;
+            const existingPasswordInput = document.getElementById("existing-user-password");
+            const existingPassword = existingPasswordInput.value;
+
+            fetch('http://localhost:8001/user/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username: existingUserName, password: existingPassword }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const userData = { userId: data.user_id, token: data.access_token };
+                    
+                    console.log(userData);
+                    sessionStorage.setItem('userData', JSON.stringify(userData));
+                    updateLoggedInUI(userData.userId);
+
+                })
+                .catch((error) => {
+                    console.error('에러:', error);
+                });
+
+
+
+        }
+        function fetchChatRooms() {
+            // API endpoint and parameters
+            const apiUrl = 'http://localhost:8001/room/rooms';
+            const skip = 0; // You can adjust this value as needed
+            const limit = 10; // You can adjust this value as needed
+
+            // Fetch request
+            fetch(`${apiUrl}?skip=${skip}&limit=${limit}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Clear the existing chat room list
+                    document.getElementById('chat-room-list').innerHTML = '';
+                    console.log(data);
+                    // Update the chat room list
+                    data.forEach(room => {
+                        const listItem = document.createElement('li');
+                        const link = document.createElement('a');
+                        link.href = '#'; // Set the href attribute to '#' for demonstration
+                        link.textContent = room.room_name;
+                        link.addEventListener('click', function () {
+                            joinChatRoom(room.id);
+                        });
+
+                        listItem.appendChild(link);
+                        document.getElementById('chat-room-list').appendChild(listItem);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching chat rooms:', error);
+                });
+        }
+
+
+        function joinChatRoom(roomId) {
+            console.log('Joining chat room with ID:', roomId);
+
+            const userIdInput = document.getElementById("existing-user-id");
+            const userId = userIdInput.value;
+
+            const token = sessionStorage.getItem('userData') ? JSON.parse(sessionStorage.getItem('userData')).token : null;
+
+            if (token) {
+                socket = new WebSocket(`ws://localhost:8001/chat/ws/${roomId}/${userId}`);
+
+                socket.onopen = (event) => {
+                    console.log("WebSocket connection opened", event);
+                };
+
+                socket.onmessage = (event) => {
+                    console.log("WebSocket message received", event.data);
+
+                    // 실제 메시지 처리 로직 추가
+                    const messagesContainer = document.getElementById("chat-messages");
+                    const message = document.createElement("div");
+                    message.textContent = event.data;
+                    messagesContainer.appendChild(message);
+
+                    // 새로운 메시지가 도착할 때마다 스크롤을 아래로 이동
+                    scrollToBottom();
+                };
+            } else {
+                console.log('Token not found.');
+            }
+        }
+
+        function getUserData() {
+            // 세션 스토리지에서 저장된 데이터 가져오기
+            const userDataString = sessionStorage.getItem('userData');
+
+            // JSON 문자열을 객체로 파싱하여 반환
+            return userDataString ? JSON.parse(userDataString) : null;
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById("message-input");
+            const message = messageInput.value;
+            socket.send(message);
+            messageInput.value = "";
+        }
+
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById("chat-messages");
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            fetchChatRooms();
+        });
+
+        function getUserData() {
+            // 세션 스토리지에서 저장된 데이터 가져오기
+            const userDataString = sessionStorage.getItem('userData');
+
+            // JSON 문자열을 객체로 파싱하여 반환
+            return userDataString ? JSON.parse(userDataString) : null;
+        }
+        function updateLoggedInUI(userId) {
+            const loggedInSection = document.getElementById('login-quadrant');
+            const userInfo = document.getElementById('user-info');
+
+            // 사용자 정보 표시
+            userInfo.textContent = `현재 사용자: ${userId}`;
+
+            // 로그인 섹션 표시
+            loggedInSection.style.display = 'block';
+
+            // 채팅방 리스트 갱신
+            // fetchChatRooms();
+        }
+        function logoutUser() {
+            // 세션 스토리지의 사용자 데이터 삭제
+            sessionStorage.removeItem('userData');
+
+            // UI 업데이트: 로그인 섹션 감추기
+            document.getElementById('logged-in-section').style.display = 'none';
+        }
+
+    </script>
+
+</body>
+
+</html>
